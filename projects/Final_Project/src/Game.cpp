@@ -2,11 +2,11 @@
 #include "GLFW/glfw3.h"
 
 float gameTime = 0.0f;
-// game states: 0 = start of game, 1 = instructions, 2 = difficulty seletion, 3 = game starting, 4 = game,  5 = game over (possibly score), 6 = restart
+// game states: 0 = start of game, 1 = instructions, 2 = difficulty seletion, 3 = game starting, 4 = game,  5 = game over, 6 = score, 7 = restart
 int gameState = 0;
 int gameDifficulty = 0;
-// 0 = left key, 1 = right key, 2 = space bar
-bool wasPressed[] = { false, false, false };
+// 0 = left key, 1 = right key, 2 = space bar, 3 = escape
+bool wasPressed[] = { false, false, false, false };
 /// each one is 1/16 to the right
 /// Easy mode	- 0 = forward, 4 = right, 8 = backward, 12 = left
 /// Normal mode	- 2 = forward-right, 6 = backward-right, 10 = backward-left, 14 = forward-left
@@ -18,6 +18,8 @@ int currentEnemySpawn = 4;
 bool enemyActive = false;
 float radarTimer = 0.0f;
 float timeToReachPlayer = 0.0f;
+int score = 0;
+float scoreTimeNeeded = 6.929f;
 GLFWwindow* gameWindow;
 
 //------------------------------------------------------------------------
@@ -44,10 +46,14 @@ void Init(GLFWwindow* currentWindow)
 	AudioEvent& track6 = engine.CreateEvent("explosion", "event:/Hit");
 	AudioEvent& track7 = engine.CreateEvent("radar", "event:/Radar");
 	AudioEvent& track8 = engine.CreateEvent("game over", "event:/Game Over");
-	AudioEvent& track9 = engine.CreateEvent("restart", "event:/Restart");
+	AudioEvent& track9 = engine.CreateEvent("score", "event:/Score");
+	AudioEvent& track10 = engine.CreateEvent("restart", "event:/Restart");
 
 	// Set parameters
 	track3.SetParameter("Difficulty", gameDifficulty);
+	track9.SetParameter("Score_Ones", 0);
+	track9.SetParameter("Score_Tens", 0);
+	track9.SetParameter("Score_Hundreds", 0);
 
 	// Get ref to Listener
 	AudioListener& listener = engine.GetListener();
@@ -118,10 +124,19 @@ void GetKeyboardInput()
 			gameState = 3;
 			gameTime = 0.0f;
 		}
-		if (gameState == 6)
+		if (gameState == 7)
 		{
 			gameState = 3;
 			gameTime = 0.0f;
+			score = 0;
+			currentForward = 0;
+			listener.SetForward(normalize(spawnPoint[currentForward]));
+			radarTimer = 0.0f;
+			enemyPos = spawnPoint[0];
+			int currentEnemySpawn = 4;
+			enemyActive = false;
+			timeToReachPlayer = 0.0f;
+			scoreTimeNeeded = 6.929f;
 		}
 	}
 	if (glfwGetKey(gameWindow, GLFW_KEY_SPACE) == GLFW_PRESS)
@@ -136,6 +151,7 @@ void GetKeyboardInput()
 				hit.Play();
 				enemyActive = false;
 				timeToReachPlayer /= 1.05f;
+				score++;
 			}
 		}
 		wasPressed[2] = true;
@@ -146,10 +162,30 @@ void GetKeyboardInput()
 	}
 	if (glfwGetKey(gameWindow, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 	{
-		if (gameState == 6 || gameState == 0)
+		if (gameState == 0 && !wasPressed[3])
 		{
 			glfwSetWindowShouldClose(gameWindow, true);
 		}
+		if (gameState == 7)
+		{
+			gameState = 0;
+			score = 0;
+			gameTime = 0.0f;
+			currentForward = 0;
+			listener.SetForward(normalize(spawnPoint[currentForward]));
+			radarTimer = 0.0f;
+			gameDifficulty = 0;
+			enemyPos = spawnPoint[0];
+			int currentEnemySpawn = 4;
+			enemyActive = false;
+			timeToReachPlayer = 0.0f;
+			scoreTimeNeeded = 6.929f;
+		}
+		wasPressed[3] = true;
+	}
+	else if (glfwGetKey(gameWindow, GLFW_KEY_ESCAPE) == GLFW_RELEASE)
+	{
+		wasPressed[3] = false;
 	}
 }
 
@@ -177,6 +213,7 @@ void Update(float deltaTime)
 	AudioEvent& dificultySelection = engine.GetEvent("difficulty selection");
 	AudioEvent& gameStarting = engine.GetEvent("game starting");
 	AudioEvent& radar = engine.GetEvent("radar");
+	AudioEvent& scoreDisplay = engine.GetEvent("score");
 	AudioEvent& gameOver = engine.GetEvent("game over");
 	AudioEvent& restart = engine.GetEvent("restart");
 	AudioListener& listener = engine.GetListener();
@@ -189,6 +226,7 @@ void Update(float deltaTime)
 		if (dificultySelection.isPlaying()) dificultySelection.Stop();
 		if (gameStarting.isPlaying()) gameStarting.Stop();
 		if (gameOver.isPlaying()) gameOver.Stop();
+		if (scoreDisplay.isPlaying()) scoreDisplay.Stop();
 		if (restart.isPlaying()) restart.Stop();
 
 		//check keyboard to start or quit the game
@@ -202,6 +240,7 @@ void Update(float deltaTime)
 		if (dificultySelection.isPlaying()) dificultySelection.Stop();
 		if (gameStarting.isPlaying()) gameStarting.Stop();
 		if (gameOver.isPlaying()) gameOver.Stop();
+		if (scoreDisplay.isPlaying()) scoreDisplay.Stop();
 		if (restart.isPlaying()) restart.Stop();
 
 		//move to the next sound event
@@ -220,6 +259,7 @@ void Update(float deltaTime)
 		if (!dificultySelection.isPlaying() && gameTime <= 0.5f) dificultySelection.Play();
 		if (gameStarting.isPlaying()) gameStarting.Stop();
 		if (gameOver.isPlaying()) gameOver.Stop();
+		if (scoreDisplay.isPlaying()) scoreDisplay.Stop();
 		if (restart.isPlaying()) restart.Stop();
 
 		//check keyboard to change difficulty and move to the next sound event
@@ -233,6 +273,7 @@ void Update(float deltaTime)
 		if (dificultySelection.isPlaying()) dificultySelection.Stop();
 		if (!gameStarting.isPlaying() && gameTime <= 0.5f) gameStarting.Play();
 		if (gameOver.isPlaying()) gameOver.Stop();
+		if (scoreDisplay.isPlaying()) scoreDisplay.Stop();
 		if (restart.isPlaying()) restart.Stop();
 
 		//move to the next sound event
@@ -258,13 +299,14 @@ void Update(float deltaTime)
 			enemyPos = spawnPoint[tempRand];
 			currentEnemySpawn = tempRand;
 
-			gameTime = 0;
+			gameTime = 0.001f; //set to 0.001 for a max possible score of 203
 			enemyActive = true;
 
 			radar.SetPosition(enemyPos);
 			if (radar.isPlaying()) radar.Stop();
 			radar.Play();
-			radarTimer = Magnitude(enemyPos) / 4.0f;
+			radarTimer = Magnitude(enemyPos) / (24.0f - timeToReachPlayer);
+			float temp = radarTimer;
 		}
 		else
 		{
@@ -282,7 +324,7 @@ void Update(float deltaTime)
 				radar.SetPosition(enemyPos);
 				if (radar.isPlaying()) radar.Stop();
 				radar.Play();
-				radarTimer = Magnitude(enemyPos) / 4.0f;
+				radarTimer = Magnitude(enemyPos) / (24.0f - timeToReachPlayer);
 			}
 		}
 
@@ -302,11 +344,22 @@ void Update(float deltaTime)
 		if (gameTime >= 2.541f)
 		{
 			gameState = 6;
-
 			gameTime = 0.0f;
+
+			int scoreOnes = score % 10;
+			int scoreTens = (score / 10) % 10;
+			int scoreHundreds = score / 100;
+			scoreDisplay.SetParameter("Score_Ones", scoreOnes);
+			scoreDisplay.SetParameter("Score_Tens", scoreTens);
+			scoreDisplay.SetParameter("Score_Hundreds", scoreHundreds);
+			if (scoreOnes == 0 && scoreTens == 0) scoreTimeNeeded -= 1.712f;
+			if (scoreHundreds == 0) scoreTimeNeeded -= 1.066f;
+			if (scoreOnes == 0 && scoreTens == 0 && scoreHundreds != 0) scoreTimeNeeded -= 1.618f;
+			if (scoreTens == 0) scoreTimeNeeded -= 0.435f;
+			if ((scoreOnes != 0 && scoreTens == 1) || (scoreOnes == 0 && scoreTens != 0)) scoreTimeNeeded -= 0.568f;
 		}
 	}
-	else if (gameState == 6) // Restart
+	else if (gameState == 6)
 	{
 		//play the appropiate sound event while bug proofing other events
 		if (startOfGame.isPlaying()) startOfGame.Stop();
@@ -314,6 +367,24 @@ void Update(float deltaTime)
 		if (dificultySelection.isPlaying()) dificultySelection.Stop();
 		if (gameStarting.isPlaying()) gameStarting.Stop();
 		if (gameOver.isPlaying()) gameOver.Stop();
+		if (!scoreDisplay.isPlaying() && gameTime <= 0.5f) scoreDisplay.Play();
+		if (restart.isPlaying()) restart.Stop();
+
+		if (gameTime >= scoreTimeNeeded)
+		{
+			gameState = 7;
+			gameTime = 0.0f;
+		}
+	}
+	else if (gameState == 7) // Restart
+	{
+		//play the appropiate sound event while bug proofing other events
+		if (startOfGame.isPlaying()) startOfGame.Stop();
+		if (instructions.isPlaying()) instructions.Stop();
+		if (dificultySelection.isPlaying()) dificultySelection.Stop();
+		if (gameStarting.isPlaying()) gameStarting.Stop();
+		if (gameOver.isPlaying()) gameOver.Stop();
+		if (scoreDisplay.isPlaying()) scoreDisplay.Stop();
 		if (!restart.isPlaying() && gameTime <= 1.0f) restart.Play();
 
 		//check keyboard to restart or quit
